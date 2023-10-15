@@ -39,19 +39,42 @@ wolfram alpha -> use, or use monte carlo sampling
 - diagram from christopher bishop book
 
 ## Notes
-- probit approximation and logistic regression
-- logistic regression true poaterior distribution using grid search
+- probit approximation in logistic regression
+- logistic regression true posterior distribution using grid search
 - piyush rai logistic rgression : bayesian averaging, iitk
 - do shape manipulation earlier before passing
-- calculating teh p(Ddel) -> use monte carlo estimate
+- calculating the p(Ddel) -> use monte carlo estimate
 - laplace torch library for nn
 - linear and logistic regression using laplace torch
 - torch and tree utils (present in jax)
 - hamil torch search look into it -> for weights across nn -> flatten and unflatten utils
 - outlier detection -> 
-- outliers using moon datatset-> point not in training set but once u account for it you get a worsse fir -> something like this
+- outliers using moon datatset-> point not in training set but once u account for it you get a worse fit -> something like this
 - liver vala do 2-d classification
 - backdoor defenses - look at
 - look at log pdf of each point-> remove that point -> see how it changes -> heuristic to identify outliers (for now) we are choosing to unlearn
 
+
+# 19/9/23
+
+## Notes
+- Go back to og paper and what is actually that we need and can we use anything other than laplace approx, maybe rejection sampling
+- We need original posterior -> we cannot comput in closed form in nn -> we need to approximate it -> laplace approx is one way to do it or we can get sample through mcmc
+- get posterior using laplace torch -> then we get ~p, 
+- go through sirs notebook and replicate it for classifciation and regression and then do it for unlearning task.
+- reduce nn to 2 layers and tehn visualize it using contour plots.
+- nb for important sampling of sir -> different data that u could have deleted find out what p(ddel|theta) -> calculate
+curve: x->p(x), y->p(del|theta)
+- visualization of teh formula -> unlearned posterior updated
+- unlearning for linear regression solidify
+
+# 26/9/23
+
+## Notes
+
+- flatten the parameters from the dictionary -> use hamiltorch (use flatten and unflatten like in assign 3) or use jtu (jax tree utils)
+- jax tree utils -> stores the exact structure of dict ->> use similar on torch -> tree flatten and unflatten in hamiltorch
+- deepminds tree library may work -> checkout
+- make inder code better
+- linear regression thing post on github issues -> see if possibe afte rmaking more complex nn
 
