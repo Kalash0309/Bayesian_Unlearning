@@ -8,18 +8,18 @@ import matplotlib.pyplot as plt
 model = Neural_Network(input_size=2, hidden_layer_sizes=[8], output_size=1)
 
 # Swiss Roll
-X, y = make_blobs(n_samples=20, centers=2, n_features=2, random_state=42)
-X = torch.tensor(X).float()
-y = torch.tensor(y).float()
-X = torch.cat((X, torch.tensor([[0, 5]]).float()))
-y = torch.cat((y, torch.tensor([1]).float()))
-X = torch.cat((X, torch.tensor([[-1, 5]]).float()))
-y = torch.cat((y, torch.tensor([1]).float()))
+# X, y = make_blobs(n_samples=20, centers=2, n_features=2, random_state=42)
+# X = torch.tensor(X).float()
+# y = torch.tensor(y).float()
+# X = torch.cat((X, torch.tensor([[0, 5]]).float()))
+# y = torch.cat((y, torch.tensor([1]).float()))
+# X = torch.cat((X, torch.tensor([[-1, 5]]).float()))
+# y = torch.cat((y, torch.tensor([1]).float()))
 
-X_del = torch.tensor([[0, 5]]).float()
-y_del = torch.tensor([1]).float()
-X_del = torch.cat((X_del, torch.tensor([[-1, 5]]).float()))
-y_del = torch.cat((y_del, torch.tensor([1]).float()))
+# X_del = torch.tensor([[0, 5]]).float()
+# y_del = torch.tensor([1]).float()
+# X_del = torch.cat((X_del, torch.tensor([[-1, 5]]).float()))
+# y_del = torch.cat((y_del, torch.tensor([1]).float()))
 
 
 # Circles
@@ -28,9 +28,9 @@ y_del = torch.cat((y_del, torch.tensor([1]).float()))
 # y = torch.tensor(y).float()
 
 # Moons
-# X, y = make_moons(n_samples=50, noise=0.1)
-# X = torch.tensor(X, dtype=torch.float)
-# y = torch.tensor(y).float()
+X, y = make_moons(n_samples=50, noise=0.1)
+X = torch.tensor(X, dtype=torch.float)
+y = torch.tensor(y).float()
 
 # Data of all the points with label 0
 # X0 = X[y == 0]

@@ -133,7 +133,7 @@ class Neural_Network(nn.Module):
         # MCMC Sampling
         params_init = hamiltorch.util.flatten(model)
         print(params_init)
-        num_samples = 1000
+        num_samples = 10000
         step_size = 0.01
         num_steps_per_sample = 5
         hamiltorch.set_random_seed(123)
@@ -185,12 +185,15 @@ class Neural_Network(nn.Module):
 
         # Calculate the covariance matrix using torch.cov
         # variance = torch.var(params_hmc_stack, dim=0)
-        centered_data = params_hmc_stack - params_map
-        cov = torch.mm(centered_data.t(), centered_data) / (params_hmc_stack.size(0) - 1)
-        # params_hmc_stack = torch.stack(params_hmc)
-        # cov = torch.cov(params_hmc_stack)
+        # centered_data = params_hmc_stack - params_map
+        # cov = torch.mm(centered_data.t(), centered_data) / (params_hmc_stack.size(0) - 1)
+        params_hmc_stack = torch.stack(params_hmc)
+        params_hmc_stack_t = params_hmc_stack.t()
+        print("params_hmc_stack")
+        print(params_hmc_stack_t)
+        cov = torch.cov(params_hmc_stack_t)
         print("cov")
-        print(cov)
+        # print(cov)
         cov = cov.detach().numpy()
         cov = self.nearestPD(cov)
         cov = torch.tensor(cov)
