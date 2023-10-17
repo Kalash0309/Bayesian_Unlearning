@@ -80,13 +80,17 @@ class Neural_Network(nn.Module):
         log_posterior = log_prior + log_likelihood
         return log_posterior
 
-        
-
     def negative_log_unlearned_joint(self, params, model, X, y):
         flattened_params = hamiltorch.util.flatten(model)
         return -self.posterior.log_prob(
             flattened_params
         ) - self.negative_log_likelihood(params, model, X, y)
+    
+    def log_prob_unlearned_posterior(self, params):
+        model = self.model
+        approx_posterior = self.posterior
+        log_prob = approx_posterior.log_prob(params) + self.negative_log_likelihood(params, model, self.X, self.Y)
+        return log_prob
 
     def functional_negative_log_prior(self, params, model, prior_var=1.0):
         partial_params_leaves = jtu.tree_leaves(params)
@@ -115,7 +119,7 @@ class Neural_Network(nn.Module):
             flattened_params
         ) - self.functional_negative_log_likelihood(params, model, X, y)
 
-    def train(self, X, Y):
+    def train_sampling(self, X, Y, subplot=None):
         self.X = X
         self.Y = Y
 
@@ -134,7 +138,7 @@ class Neural_Network(nn.Module):
         params_init = hamiltorch.util.flatten(model)
         print(params_init)
         num_samples = 10000
-        step_size = 0.01
+        step_size = 0.001
         num_steps_per_sample = 5
         hamiltorch.set_random_seed(123)
 
@@ -142,7 +146,6 @@ class Neural_Network(nn.Module):
                                num_samples=num_samples, step_size=step_size, 
                                num_steps_per_sample=num_steps_per_sample, pass_grad=torch.tensor)
         
-        print(params_hmc[0])
         params_hmc_stack = torch.stack(params_hmc)
 
         params_map = torch.mean(params_hmc_stack, dim=0)
@@ -151,95 +154,201 @@ class Neural_Network(nn.Module):
 
         # plot theta_map boundary
         params_list = hamiltorch.util.unflatten(model, params_map)
-        hamiltorch.util.update_model_params_in_place(model, params_list)        
+        hamiltorch.util.update_model_params_in_place(model, params_list)
 
-        min1, max1 = X[:, 0].min() - 1, X[:, 0].max() + 1
-        min2, max2 = X[:, 1].min() - 1, X[:, 1].max() + 1
+        self.plot_theta_map_boundary(model, X, Y, title="Theta MAP Boundary - Sampling", subplot=subplot)   
 
-        x1grid = np.arange(min1, max1, 0.01)
-        x2grid = np.arange(min2, max2, 0.01)
+        # min1, max1 = X[:, 0].min() - 1, X[:, 0].max() + 1
+        # min2, max2 = X[:, 1].min() - 1, X[:, 1].max() + 1
 
-        xx, yy = np.meshgrid(x1grid, x2grid)
+        # x1grid = np.arange(min1, max1, 0.01)
+        # x2grid = np.arange(min2, max2, 0.01)
 
-        r1, r2 = xx.flatten(), yy.flatten()
-        r1, r2 = r1.reshape((len(r1), 1)), r2.reshape((len(r2), 1))
+        # xx, yy = np.meshgrid(x1grid, x2grid)
 
-        grid = np.hstack((r1, r2))
+        # r1, r2 = xx.flatten(), yy.flatten()
+        # r1, r2 = r1.reshape((len(r1), 1)), r2.reshape((len(r2), 1))
 
-        yhat = model(torch.tensor(grid).float()).detach().numpy()
+        # grid = np.hstack((r1, r2))
 
-        zz = yhat.reshape(xx.shape)
+        # yhat = model(torch.tensor(grid).float()).detach().numpy()
 
-        plt.contourf(xx, yy, zz, cmap="bwr", alpha=0.5, levels=100)
-        plt.scatter(X[:, 0], X[:, 1], c=Y, cmap="bwr")
-        plt.title("Theta MAP Boundary")
-        plt.xlabel("x1")
-        plt.ylabel("x2")
-        plt.colorbar()
-        plt.savefig("theta_map_boundary.png")
-        plt.show()
+        # zz = yhat.reshape(xx.shape)
+
+        # plt.contourf(xx, yy, zz, cmap="bwr", alpha=0.5, levels=100)
+        # plt.scatter(X[:, 0], X[:, 1], c=Y, cmap="bwr")
+        # plt.title("Theta MAP Boundary")
+        # plt.xlabel("x1")
+        # plt.ylabel("x2")
+        # plt.colorbar()
+        # plt.savefig("theta_map_boundary.png")
+        # plt.show()
 
         self.model = model
 
-        # calculate covariance matrix
-
         # Calculate the covariance matrix using torch.cov
-        # variance = torch.var(params_hmc_stack, dim=0)
-        # centered_data = params_hmc_stack - params_map
-        # cov = torch.mm(centered_data.t(), centered_data) / (params_hmc_stack.size(0) - 1)
-        params_hmc_stack = torch.stack(params_hmc)
         params_hmc_stack_t = params_hmc_stack.t()
-        print("params_hmc_stack")
-        print(params_hmc_stack_t)
+        # print("params_hmc_stack")
+        # print(params_hmc_stack_t)
         cov = torch.cov(params_hmc_stack_t)
-        print("cov")
-        # print(cov)
         cov = cov.detach().numpy()
         cov = self.nearestPD(cov)
         cov = torch.tensor(cov)
+        print("cov")
         print(cov)
-        print(cov.shape)
 
-        laplace_posterior = torch.distributions.MultivariateNormal(params_map, cov)
+        sampling_posterior = torch.distributions.MultivariateNormal(params_map, cov)
 
-        self.posterior = laplace_posterior
-        print("posterior obtained")
+        self.posterior = sampling_posterior
+        # print("posterior obtained")
 
-        self.plot_decision_boundary(
-            X, Y, laplace_posterior, "Laplace Approximation Posterior Boundary"
+        # self.plot_decision_boundary(
+        #     X, Y, sampling_posterior, "Laplace Approximation Posterior Boundary"
+        # )
+        return sampling_posterior
+
+    def train_laplace(self, X, Y, subplot=None):
+        self.X = X
+        self.Y = Y
+
+        # Theta MAP
+        model = []
+        for layer in self.fcs[:-1]:
+            model.append(layer)
+            model.append(nn.ReLU())
+        model.append(self.fcs[-1])
+        model.append(nn.Sigmoid())
+        model = nn.Sequential(*model)
+
+        self.no_parameters = sum(p.numel() for p in model.parameters())
+
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+        params = {"nn_params": list(model.parameters())}
+        for i in range(1000):
+            optimizer.zero_grad()
+            loss = self.negative_log_joint(params, model, X, Y, 10)
+            loss.backward()
+            optimizer.step()
+            if i % 100 == 0:
+                print(f"Loss at iteration {i}: {loss.item()}")
+
+        # plot theta map boundary
+
+        self.plot_theta_map_boundary(model, X, Y, title="Theta MAP Boundary - Laplace", subplot=subplot)
+
+        # min1, max1 = X[:, 0].min() - 1, X[:, 0].max() + 1
+        # min2, max2 = X[:, 1].min() - 1, X[:, 1].max() + 1
+
+        # x1grid = np.arange(min1, max1, 0.01)
+        # x2grid = np.arange(min2, max2, 0.01)
+
+        # xx, yy = np.meshgrid(x1grid, x2grid)
+
+        # r1, r2 = xx.flatten(), yy.flatten()
+        # r1, r2 = r1.reshape((len(r1), 1)), r2.reshape((len(r2), 1))
+
+        # grid = np.hstack((r1, r2))
+
+        # yhat = model(torch.tensor(grid).float()).detach().numpy()
+
+        # zz = yhat.reshape(xx.shape)
+
+        # plt.contourf(xx, yy, zz, cmap="bwr", alpha=0.5, levels=100)
+        # plt.scatter(X[:, 0], X[:, 1], c=Y, cmap="bwr")
+        # plt.title("Theta MAP Boundary")
+        # plt.xlabel("x1")
+        # plt.ylabel("x2")
+        # plt.colorbar()
+        # plt.savefig("theta_map_boundary.png")
+        # plt.show()
+
+        self.model = model
+        # Hessian
+        params = dict(model.named_parameters())
+
+        partial_func = partial(
+            self.functional_negative_log_joint, model=model, X=X, y=Y, prior_var=10
         )
 
-        # Hessian
-        # params = dict(model.named_parameters())
+        H = torch.func.hessian(partial_func)(params)
 
-        # partial_func = partial(
-        #     self.functional_negative_log_joint, model=model, X=X, y=Y, prior_var=10
-        # )
+        H_mat = self.hessian_dict_to_matrix(H, model)
 
-        # H = torch.func.hessian(partial_func)(params)
+        cov = torch.inverse(H_mat + 1e-1 * torch.eye(H_mat.shape[0]))
+        # cov = torch.inverse(H_mat + 1e-3 * torch.eye(H_mat.shape[0]))
+        cov = cov.detach().numpy()
+        cov = self.nearestPD(cov)
+        cov = torch.tensor(cov)
 
-        # H_mat = self.hessian_dict_to_matrix(H)
+        theta_map = hamiltorch.util.flatten(model)
 
-        # cov = torch.inverse(H_mat + 1e-1 * torch.eye(H_mat.shape[0]))
-        # # cov = torch.inverse(H_mat + 1e-3 * torch.eye(H_mat.shape[0]))
-        # cov = cov.detach().numpy()
-        # cov = self.nearestPD(cov)
-        # cov = torch.tensor(cov)
+        laplace_posterior = torch.distributions.MultivariateNormal(theta_map, cov)
 
-        # theta_map = hamiltorch.util.flatten(model)
-
-        # laplace_posterior = torch.distributions.MultivariateNormal(theta_map, cov)
-
-        # self.posterior = laplace_posterior
+        self.posterior = laplace_posterior
 
         # self.plot_decision_boundary(
         #     X, Y, laplace_posterior, "Laplace Approximation Posterior Boundary"
         # )
+        return laplace_posterior
 
-    def unlearn(self, X, Y):
+    def unlearn_sampling(self, X, Y, subplot_theta=None, subplot_posterior=None, type="sampling"):
+        model = self.model
+        
+        # MCMC Sampling
+        params_init = hamiltorch.util.flatten(model)
+        # print(params_init)
+        num_samples = 10000
+        step_size = 0.001
+        num_steps_per_sample = 5
+        hamiltorch.set_random_seed(123)
+
+        params_hmc = hamiltorch.sample(log_prob_func=self.log_prob_unlearned_posterior, params_init=params_init,  
+                               num_samples=num_samples, step_size=step_size, 
+                               num_steps_per_sample=num_steps_per_sample, pass_grad=torch.tensor)
+        
+        params_hmc_stack = torch.stack(params_hmc)
+
+        params_map = torch.mean(params_hmc_stack, dim=0)
+        # print("params_map")
+        # print(params_map)
+
+        # plot theta_map boundary
+        params_list = hamiltorch.util.unflatten(model, params_map)
+        hamiltorch.util.update_model_params_in_place(model, params_list)
+
+        # Calculate the covariance matrix using torch.cov
+        params_hmc_stack_t = params_hmc_stack.t()
+        # print("params_hmc_stack")
+        # print(params_hmc_stack_t)
+        cov = torch.cov(params_hmc_stack_t)
+        cov = cov.detach().numpy()
+        cov = self.nearestPD(cov)
+        cov = torch.tensor(cov)
+
+        del_posterior = torch.distributions.MultivariateNormal(params_map, cov)
+
+        self.plot_decision_boundary(
+            self.X,
+            self.Y,
+            del_posterior,
+            f"Unlearned Posterior Boundary {type}",
+            save_file=f"unlearned_boundary_{type}.png",
+            unlearned=True,
+            X_unlearned=X,
+            Y_unlearned=Y,
+            subplot=subplot_posterior
+        )
+
+        kl = self.kl_divergence(del_posterior, X, Y, subplot= subplot_theta, type = type)
+        print(
+            f"KL Divergence between Unlearned Posterior and Sampling Retained Posteriror: {kl}"
+        )
+
+
+    def unlearn_laplace(self, X, Y, subplot_theta=None, subplot_posterior=None, type="laplace"):
         # Theta MAP Unlearned
         model = self.model
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
         params = {"nn_params": list(model.parameters())}
         for i in range(1000):
             optimizer.zero_grad()
@@ -249,32 +358,35 @@ class Neural_Network(nn.Module):
             if i % 100 == 0:
                 print(f"Loss at iteration {i}: {loss.item()}")
 
-        min1, max1 = self.X[:, 0].min() - 1, self.X[:, 0].max() + 1
-        min2, max2 = self.X[:, 1].min() - 1, self.X[:, 1].max() + 1
+        # plot theta map boundary
 
-        x1grid = np.arange(min1, max1, 0.01)
-        x2grid = np.arange(min2, max2, 0.01)
+        # self.plot_theta_map_boundary(model, self.X, self.Y, title=f"Theta MAP Boundary {type} - Unlearned", subplot=subplot_theta)
+        # min1, max1 = self.X[:, 0].min() - 1, self.X[:, 0].max() + 1
+        # min2, max2 = self.X[:, 1].min() - 1, self.X[:, 1].max() + 1
 
-        xx, yy = np.meshgrid(x1grid, x2grid)
+        # x1grid = np.arange(min1, max1, 0.01)
+        # x2grid = np.arange(min2, max2, 0.01)
 
-        r1, r2 = xx.flatten(), yy.flatten()
-        r1, r2 = r1.reshape((len(r1), 1)), r2.reshape((len(r2), 1))
+        # xx, yy = np.meshgrid(x1grid, x2grid)
 
-        grid = np.hstack((r1, r2))
+        # r1, r2 = xx.flatten(), yy.flatten()
+        # r1, r2 = r1.reshape((len(r1), 1)), r2.reshape((len(r2), 1))
 
-        yhat = model(torch.tensor(grid).float()).detach().numpy()
+        # grid = np.hstack((r1, r2))
 
-        zz = yhat.reshape(xx.shape)
+        # yhat = model(torch.tensor(grid).float()).detach().numpy()
 
-        plt.contourf(xx, yy, zz, cmap="bwr", alpha=0.5, levels=100)
-        plt.scatter(self.X[:, 0], self.X[:, 1], c=self.Y, cmap="bwr")
-        plt.scatter(X[:, 0], X[:, 1], c=Y, cmap="bwr", marker="x", s=100)
-        plt.title("Theta MAP Unlearned Boundary")
-        plt.xlabel("x1")
-        plt.ylabel("x2")
-        plt.colorbar()
-        plt.savefig("theta_map_unlearned_boundary.png")
-        plt.show()
+        # zz = yhat.reshape(xx.shape)
+
+        # plt.contourf(xx, yy, zz, cmap="bwr", alpha=0.5, levels=100)
+        # plt.scatter(self.X[:, 0], self.X[:, 1], c=self.Y, cmap="bwr")
+        # plt.scatter(X[:, 0], X[:, 1], c=Y, cmap="bwr", marker="x", s=100)
+        # plt.title("Theta MAP Unlearned Boundary")
+        # plt.xlabel("x1")
+        # plt.ylabel("x2")
+        # plt.colorbar()
+        # plt.savefig("theta_map_unlearned_boundary.png")
+        # plt.show()
 
         # Hessian
         params = dict(model.named_parameters())
@@ -285,7 +397,7 @@ class Neural_Network(nn.Module):
 
         H = torch.func.hessian(partial_func)(params)
 
-        H_mat = self.hessian_dict_to_matrix(H)
+        H_mat = self.hessian_dict_to_matrix(H, model)
 
         cov = torch.inverse(H_mat + 1e-1 * torch.eye(H_mat.shape[0]))
 
@@ -301,19 +413,20 @@ class Neural_Network(nn.Module):
             self.X,
             self.Y,
             del_posterior,
-            "Unlearned Posterior Boundary",
-            save_file="unlearned_boundary.png",
+            f"Unlearned Posterior Boundary {type}",
+            save_file=f"unlearned_boundary_{type}.png",
             unlearned=True,
             X_unlearned=X,
             Y_unlearned=Y,
+            subplot=subplot_posterior
         )
 
-        kl = self.kl_divergence(del_posterior, X, Y)
+        kl = self.kl_divergence(del_posterior, X, Y, subplot= subplot_theta, type = type)
         print(
-            f"KL Divergence between Unlearned Posterior and Laplace of Retained Posteriror: {kl}"
+            f"KL Divergence between Unlearned Posterior and Laplace Retained Posteriror: {kl}"
         )
 
-    def kl_divergence(self, approx_posterior, X_del, y_del):
+    def kl_divergence(self, approx_posterior, X_del, y_del, subplot=None, type="sampling"):
         X = self.X
         Y = self.Y
 
@@ -360,14 +473,18 @@ class Neural_Network(nn.Module):
 
         zz = yhat.reshape(xx.shape)
 
-        plt.contourf(xx, yy, zz, cmap="bwr", alpha=0.5, levels=20)
-        plt.scatter(X[:, 0], X[:, 1], c=Y, cmap="bwr")
-        plt.title("Theta MAP Retained Boundary")
-        plt.xlabel("x1")
-        plt.ylabel("x2")
-        plt.colorbar()
-        plt.savefig("theta_map_retained_boundary.png")
-        plt.show()
+        if subplot is None:
+            fig = plt.figure()
+            subplot = fig.add_subplot(111)
+
+        subplot.contourf(xx, yy, zz, cmap="bwr", alpha=0.5, levels=20)
+        subplot.scatter(X[:, 0], X[:, 1], c=Y, cmap="bwr")
+        subplot.set_title(f"Theta MAP Retained Boundary - {type}")
+        subplot.set_xlabel("x1")
+        subplot.set_ylabel("x2")
+        # subplot.colorbar()
+        # subplot.savefig("theta_map_retained_boundary.png")
+        # plt.show()
 
         # Hessian
         params = dict(model.named_parameters())
@@ -378,7 +495,7 @@ class Neural_Network(nn.Module):
 
         H = torch.func.hessian(partial_func)(params)
 
-        H_mat = self.hessian_dict_to_matrix(H)
+        H_mat = self.hessian_dict_to_matrix(H, model)
 
         cov = torch.inverse(H_mat + 1e-1 * torch.eye(H_mat.shape[0]))
         # cov = torch.inverse(H_mat + 1e-3 * torch.eye(H_mat.shape[0]))
@@ -416,6 +533,7 @@ class Neural_Network(nn.Module):
         unlearned=False,
         X_unlearned=None,
         Y_unlearned=None,
+        subplot=None
     ):
         min1, max1 = X[:, 0].min() - 1, X[:, 0].max() + 1
         min2, max2 = X[:, 1].min() - 1, X[:, 1].max() + 1
@@ -436,10 +554,13 @@ class Neural_Network(nn.Module):
                 mean[j, i], std[j, i] = self.predict_mc(x, 1000, approx_posterior)
 
         # Plot the mean
-        plt.contourf(xx, yy, mean, cmap="bwr", alpha=0.5, levels=100)
-        plt.scatter(X[:, 0], X[:, 1], c=Y, cmap="bwr")
+        if subplot is None:
+            fig = plt.figure()
+            subplot = fig.add_subplot(111)
+        subplot.contourf(xx, yy, mean, cmap="bwr", alpha=0.5, levels=100)
+        subplot.scatter(X[:, 0], X[:, 1], c=Y, cmap="bwr")
         if unlearned:
-            plt.scatter(
+            subplot.scatter(
                 X_unlearned[:, 0],
                 X_unlearned[:, 1],
                 c=Y_unlearned,
@@ -447,16 +568,46 @@ class Neural_Network(nn.Module):
                 marker="x",
                 s=100,
             )
-        plt.title(title)
-        plt.xlabel("x1")
-        plt.ylabel("x2")
-        plt.colorbar()
-        plt.savefig(save_file)
-        plt.show()
+        subplot.set_title(title)
+        subplot.set_xlabel("x1")
+        subplot.set_ylabel("x2")
+        # plt.colorbar(subplot)
+        # plt.savefig(save_file)
+        # plt.show()
 
-    def hessian_dict_to_matrix(self, H):
+    def plot_theta_map_boundary(self, model, X, Y, title="Theta MAP Boundary", subplot=None):
+        min1, max1 = X[:, 0].min() - 1, X[:, 0].max() + 1
+        min2, max2 = X[:, 1].min() - 1, X[:, 1].max() + 1
+
+        x1grid = np.arange(min1, max1, 0.01)
+        x2grid = np.arange(min2, max2, 0.01)
+
+        xx, yy = np.meshgrid(x1grid, x2grid)
+
+        r1, r2 = xx.flatten(), yy.flatten()
+        r1, r2 = r1.reshape((len(r1), 1)), r2.reshape((len(r2), 1))
+
+        grid = np.hstack((r1, r2))
+
+        yhat = model(torch.tensor(grid).float()).detach().numpy()
+
+        zz = yhat.reshape(xx.shape)
+
+        if subplot is None:
+            fig = plt.figure()
+            subplot = fig.add_subplot(111)
+        subplot.contourf(xx, yy, zz, cmap="bwr", alpha=0.5, levels=100)
+        subplot.scatter(X[:, 0], X[:, 1], c=Y, cmap="bwr")
+        subplot.set_title(title)
+        subplot.set_xlabel("x1")
+        subplot.set_ylabel("x2")
+        # plt.colorbar()
+        # plt.savefig("theta_map_boundary.png")
+        # plt.show()
+
+    def hessian_dict_to_matrix(self, H, model):
         H_matrix = torch.zeros((self.no_parameters, self.no_parameters))
-        named_parameters = dict(self.model.named_parameters())
+        named_parameters = dict(model.named_parameters())
         size_params = []
         for key in named_parameters:
             temp = []

@@ -8,18 +8,18 @@ import matplotlib.pyplot as plt
 model = Neural_Network(input_size=2, hidden_layer_sizes=[8], output_size=1)
 
 # Swiss Roll
-# X, y = make_blobs(n_samples=20, centers=2, n_features=2, random_state=42)
-# X = torch.tensor(X).float()
-# y = torch.tensor(y).float()
-# X = torch.cat((X, torch.tensor([[0, 5]]).float()))
-# y = torch.cat((y, torch.tensor([1]).float()))
-# X = torch.cat((X, torch.tensor([[-1, 5]]).float()))
-# y = torch.cat((y, torch.tensor([1]).float()))
+X, y = make_blobs(n_samples=20, centers=2, n_features=2, random_state=42)
+X = torch.tensor(X).float()
+y = torch.tensor(y).float()
+X = torch.cat((X, torch.tensor([[0, 5]]).float()))
+y = torch.cat((y, torch.tensor([1]).float()))
+X = torch.cat((X, torch.tensor([[-1, 5]]).float()))
+y = torch.cat((y, torch.tensor([1]).float()))
 
-# X_del = torch.tensor([[0, 5]]).float()
-# y_del = torch.tensor([1]).float()
-# X_del = torch.cat((X_del, torch.tensor([[-1, 5]]).float()))
-# y_del = torch.cat((y_del, torch.tensor([1]).float()))
+X_del = torch.tensor([[0, 5]]).float()
+y_del = torch.tensor([1]).float()
+X_del = torch.cat((X_del, torch.tensor([[-1, 5]]).float()))
+y_del = torch.cat((y_del, torch.tensor([1]).float()))
 
 
 # Circles
@@ -28,9 +28,9 @@ model = Neural_Network(input_size=2, hidden_layer_sizes=[8], output_size=1)
 # y = torch.tensor(y).float()
 
 # Moons
-X, y = make_moons(n_samples=50, noise=0.1)
-X = torch.tensor(X, dtype=torch.float)
-y = torch.tensor(y).float()
+# X, y = make_moons(n_samples=50, noise=0.1)
+# X = torch.tensor(X, dtype=torch.float)
+# y = torch.tensor(y).float()
 
 # Data of all the points with label 0
 # X0 = X[y == 0]
@@ -70,8 +70,33 @@ y = torch.tensor(y).float()
 # X_del = X_del.float()
 # y_del = y_del.float()
 
-# plt.scatter(X[:, 0], X[:, 1], c=y, cmap="bwr")
+plt.scatter(X[:, 0], X[:, 1], c=y, cmap="bwr")
+plt.show()
+
+fig_theta, axes_theta = plt.subplots(1, 2, figsize=(12, 4)) 
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))  # 1 row and 2 columns
+fig_unlearned_theta, axes_unlearned_theta = plt.subplots(1, 2, figsize=(12, 4))
+fig_unlearned_posterior, axes_unlearned_posterior = plt.subplots(1, 2, figsize=(12, 4))
+
+posterior_sampling = model.train_sampling(X, y, subplot=axes_theta[0])
+fig_sampling = model.plot_decision_boundary(X, y, approx_posterior=posterior_sampling, title="Predictive Posterior Distribution - Sampling", subplot=axes[0])
+model.unlearn_sampling(X_del, y_del, subplot_theta=axes_unlearned_theta[0], subplot_posterior=axes_unlearned_posterior[0], type="sampling")
+# kl_sampling = model.kl_divergence(X_del, y_del,posterior_sampling)
+
+
+posterior_laplace = model.train_laplace(X, y, subplot=axes_theta[1])
+fig_laplace = model.plot_decision_boundary(X, y, approx_posterior=posterior_laplace, title="Predictive Posterior Distribution - Laplace", subplot=axes[1])
+model.unlearn_laplace(X_del, y_del, subplot_theta=axes_unlearned_theta[1], subplot_posterior=axes_unlearned_posterior[1], type="laplace")
+# kl_laplace = model.kl_divergence(X_del, y_del,posterior_laplace)
+
+fig_theta.savefig("theta_map_sampling_vs_laplace.png")
+fig.savefig("predictive_posterior_sampling_vs_laplace.png")
+fig_unlearned_theta.savefig("unlearned_theta_sampling_vs_laplace.png")
+fig_unlearned_posterior.savefig("unlearned_posterior_sampling_vs_laplace.png")
 # plt.show()
 
-model.train(X, y)
-# model.unlearn(X_del, y_del)
+
+# print("KL Divergence - Sampling: ", kl_sampling)
+# print("KL Divergence - Laplace: ", kl_laplace)
+
+# plt.show()
