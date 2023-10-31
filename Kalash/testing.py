@@ -5,10 +5,10 @@ from sklearn.datasets import make_circles
 from sklearn.datasets import make_blobs
 import matplotlib.pyplot as plt
 
-model = Neural_Network(input_size=2, hidden_layer_sizes=[8], output_size=1)
+model = Neural_Network(input_size=2, hidden_layer_sizes=[5], output_size=1)
 
 # Swiss Roll
-X, y = make_blobs(n_samples=20, centers=2, n_features=2, random_state=42)
+X, y = make_blobs(n_samples=50, centers=2, n_features=2, random_state=42)
 X = torch.tensor(X).float()
 y = torch.tensor(y).float()
 X = torch.cat((X, torch.tensor([[0, 5]]).float()))
@@ -27,10 +27,43 @@ y_del = torch.cat((y_del, torch.tensor([1]).float()))
 # X = torch.tensor(X).float()
 # y = torch.tensor(y).float()
 
+# # # pick some points to delete
+# X_del = []
+# y_del = []
+
+# for i in range(100):
+#     if y[i] == 1 and X[i, 0] > 0.5:
+#         X_del.append([X[i,0],X[i,1]])
+#         y_del.append(y[i])
+
+
+# y = y.view(-1)
+# y_del = torch.tensor(y_del).view(-1)
+# X_del = torch.tensor(X_del)
+# X_del = X_del.float()
+# y_del = y_del.float()
+
 # Moons
 # X, y = make_moons(n_samples=50, noise=0.1)
 # X = torch.tensor(X, dtype=torch.float)
 # y = torch.tensor(y).float()
+
+# # pick some points to delete
+# X_del = []
+# y_del = []
+
+# for i in range(50):
+#     if y[i] == 1 and X[i, 0] < 0 and X[i, 1] > 0:
+#         X_del.append([X[i,0],X[i,1]])
+#         y_del.append(y[i])
+
+
+# y = y.view(-1)
+# y_del = torch.tensor(y_del).view(-1)
+# X_del = torch.tensor(X_del)
+# X_del = X_del.float()
+# y_del = y_del.float()
+
 
 # Data of all the points with label 0
 # X0 = X[y == 0]
@@ -70,8 +103,8 @@ y_del = torch.cat((y_del, torch.tensor([1]).float()))
 # X_del = X_del.float()
 # y_del = y_del.float()
 
-plt.scatter(X[:, 0], X[:, 1], c=y, cmap="bwr")
-plt.show()
+# plt.scatter(X[:, 0], X[:, 1], c=y, cmap="bwr")
+# plt.show()
 
 fig_theta, axes_theta = plt.subplots(1, 2, figsize=(12, 4)) 
 fig, axes = plt.subplots(1, 2, figsize=(12, 4))  # 1 row and 2 columns
@@ -89,10 +122,10 @@ fig_laplace = model.plot_decision_boundary(X, y, approx_posterior=posterior_lapl
 model.unlearn_laplace(X_del, y_del, subplot_theta=axes_unlearned_theta[1], subplot_posterior=axes_unlearned_posterior[1], type="laplace")
 # kl_laplace = model.kl_divergence(X_del, y_del,posterior_laplace)
 
-fig_theta.savefig("theta_map_sampling_vs_laplace.png")
-fig.savefig("predictive_posterior_sampling_vs_laplace.png")
-fig_unlearned_theta.savefig("unlearned_theta_sampling_vs_laplace.png")
-fig_unlearned_posterior.savefig("unlearned_posterior_sampling_vs_laplace.png")
+fig_theta.savefig("swiss_theta_map_sampling_vs_laplace.png")
+fig.savefig("swiss_predictive_posterior_sampling_vs_laplace.png")
+fig_unlearned_theta.savefig("swiss_unlearned_theta_sampling_vs_laplace.png")
+fig_unlearned_posterior.savefig("swiss_unlearned_posterior_sampling_vs_laplace.png")
 # plt.show()
 
 

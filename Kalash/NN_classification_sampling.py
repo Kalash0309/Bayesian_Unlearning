@@ -44,7 +44,7 @@ class Neural_Network(nn.Module):
     #     log_likelihood = -loss(y_pred, y)
     #     return torch.exp(log_likelihood + log_prob)
 
-    def negative_log_prior(self, params, model, prior_var=1.0):
+    def negative_log_prior(self, params, model, prior_var=10.0):
         log_prior = 0.0
         for param in model.parameters():
             log_prior += torch.distributions.Normal(0, prior_var).log_prob(param).sum()
@@ -53,6 +53,7 @@ class Neural_Network(nn.Module):
     def negative_log_likelihood(self, params, model, X, y):
         y_pred = model(X).squeeze()
         loss = nn.BCELoss()
+        assert y_pred.shape == y.shape
         return loss(y_pred, y)
 
     def negative_log_joint(self, params, model, X, y, prior_var):
@@ -70,7 +71,7 @@ class Neural_Network(nn.Module):
         model = nn.Sequential(*model)
         
         # log_prior
-        prior_var=1.0
+        prior_var=10.0
         log_prior = -self.negative_log_prior(params, model, prior_var)
 
         # log_likelihood
@@ -92,7 +93,7 @@ class Neural_Network(nn.Module):
         log_prob = approx_posterior.log_prob(params) + self.negative_log_likelihood(params, model, self.X, self.Y)
         return log_prob
 
-    def functional_negative_log_prior(self, params, model, prior_var=1.0):
+    def functional_negative_log_prior(self, params, model, prior_var=10.0):
         partial_params_leaves = jtu.tree_leaves(params)
         log_prob = 0.0
         for param in partial_params_leaves:
@@ -138,7 +139,7 @@ class Neural_Network(nn.Module):
         params_init = hamiltorch.util.flatten(model)
         print(params_init)
         num_samples = 10000
-        step_size = 0.001
+        step_size = 0.01
         num_steps_per_sample = 5
         hamiltorch.set_random_seed(123)
 
@@ -146,6 +147,9 @@ class Neural_Network(nn.Module):
                                num_samples=num_samples, step_size=step_size, 
                                num_steps_per_sample=num_steps_per_sample, pass_grad=torch.tensor)
         
+        #remove the first 1000 samples
+        params_hmc = params_hmc[1000:]
+
         params_hmc_stack = torch.stack(params_hmc)
 
         params_map = torch.mean(params_hmc_stack, dim=0)
@@ -157,32 +161,6 @@ class Neural_Network(nn.Module):
         hamiltorch.util.update_model_params_in_place(model, params_list)
 
         self.plot_theta_map_boundary(model, X, Y, title="Theta MAP Boundary - Sampling", subplot=subplot)   
-
-        # min1, max1 = X[:, 0].min() - 1, X[:, 0].max() + 1
-        # min2, max2 = X[:, 1].min() - 1, X[:, 1].max() + 1
-
-        # x1grid = np.arange(min1, max1, 0.01)
-        # x2grid = np.arange(min2, max2, 0.01)
-
-        # xx, yy = np.meshgrid(x1grid, x2grid)
-
-        # r1, r2 = xx.flatten(), yy.flatten()
-        # r1, r2 = r1.reshape((len(r1), 1)), r2.reshape((len(r2), 1))
-
-        # grid = np.hstack((r1, r2))
-
-        # yhat = model(torch.tensor(grid).float()).detach().numpy()
-
-        # zz = yhat.reshape(xx.shape)
-
-        # plt.contourf(xx, yy, zz, cmap="bwr", alpha=0.5, levels=100)
-        # plt.scatter(X[:, 0], X[:, 1], c=Y, cmap="bwr")
-        # plt.title("Theta MAP Boundary")
-        # plt.xlabel("x1")
-        # plt.ylabel("x2")
-        # plt.colorbar()
-        # plt.savefig("theta_map_boundary.png")
-        # plt.show()
 
         self.model = model
 
@@ -200,11 +178,7 @@ class Neural_Network(nn.Module):
         sampling_posterior = torch.distributions.MultivariateNormal(params_map, cov)
 
         self.posterior = sampling_posterior
-        # print("posterior obtained")
 
-        # self.plot_decision_boundary(
-        #     X, Y, sampling_posterior, "Laplace Approximation Posterior Boundary"
-        # )
         return sampling_posterior
 
     def train_laplace(self, X, Y, subplot=None):
@@ -222,7 +196,7 @@ class Neural_Network(nn.Module):
 
         self.no_parameters = sum(p.numel() for p in model.parameters())
 
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
         params = {"nn_params": list(model.parameters())}
         for i in range(1000):
             optimizer.zero_grad()
@@ -293,12 +267,12 @@ class Neural_Network(nn.Module):
 
     def unlearn_sampling(self, X, Y, subplot_theta=None, subplot_posterior=None, type="sampling"):
         model = self.model
-        
+
         # MCMC Sampling
         params_init = hamiltorch.util.flatten(model)
         # print(params_init)
         num_samples = 10000
-        step_size = 0.001
+        step_size = 0.01
         num_steps_per_sample = 5
         hamiltorch.set_random_seed(123)
 
@@ -306,6 +280,7 @@ class Neural_Network(nn.Module):
                                num_samples=num_samples, step_size=step_size, 
                                num_steps_per_sample=num_steps_per_sample, pass_grad=torch.tensor)
         
+        params_hmc = params_hmc[1000:]
         params_hmc_stack = torch.stack(params_hmc)
 
         params_map = torch.mean(params_hmc_stack, dim=0)
@@ -331,7 +306,7 @@ class Neural_Network(nn.Module):
             self.X,
             self.Y,
             del_posterior,
-            f"Unlearned Posterior Boundary {type}",
+            f"Unlearned Posterior Boundary: {type}",
             save_file=f"unlearned_boundary_{type}.png",
             unlearned=True,
             X_unlearned=X,
@@ -344,11 +319,10 @@ class Neural_Network(nn.Module):
             f"KL Divergence between Unlearned Posterior and Sampling Retained Posteriror: {kl}"
         )
 
-
     def unlearn_laplace(self, X, Y, subplot_theta=None, subplot_posterior=None, type="laplace"):
         # Theta MAP Unlearned
         model = self.model
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
         params = {"nn_params": list(model.parameters())}
         for i in range(1000):
             optimizer.zero_grad()
@@ -413,7 +387,7 @@ class Neural_Network(nn.Module):
             self.X,
             self.Y,
             del_posterior,
-            f"Unlearned Posterior Boundary {type}",
+            f"Unlearned Posterior Boundary: {type}",
             save_file=f"unlearned_boundary_{type}.png",
             unlearned=True,
             X_unlearned=X,
@@ -551,7 +525,7 @@ class Neural_Network(nn.Module):
         for i in tqdm(range(len(x1grid)), desc="Plotting Decision Boundary"):
             for j in range(len(x2grid)):
                 x = torch.tensor([x1grid[i], x2grid[j]]).float()
-                mean[j, i], std[j, i] = self.predict_mc(x, 1000, approx_posterior)
+                mean[j, i], std[j, i] = self.predict_mc(x, 10000, approx_posterior)
 
         # Plot the mean
         if subplot is None:
